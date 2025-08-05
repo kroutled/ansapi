@@ -10,10 +10,10 @@ import (
 )
 
 //----------------------------------------------------------------------------------
-type Client struct (
+type Client struct {
 	BaseURL string
 	APIKey  string
-)
+}
 //----------------------------------------------------------------------------------
 func (c *Client) SetClientConfig(baseURL, apiKey string) {
 	BaseURL = baseURL
