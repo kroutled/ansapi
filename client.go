@@ -93,7 +93,7 @@ func (c *Client) GetTemplates() Templates {
 }
 //----------------------------------------------------------------------------------
 func (c *Client) GetCourses() Courses {
-	templates := GetTemplates()
+	templates := c.GetTemplates()
 	var courses Courses	
 	for _, template := range templates.Templates {
 		endpoint := fmt.Sprintf("/getCourses/%s", template.Id)
@@ -116,7 +116,7 @@ func (c *Client) GetCourses() Courses {
 func (c *Client) GetSubscriptions(learnerEmail string) Courses {
 	var courses Courses	
 	var learnerUID string
-	learners := GetUsers()
+	learners := c.GetUsers()
 
 	for _, learner := range learners.Users {
 		if learner.Email == learnerEmail {
