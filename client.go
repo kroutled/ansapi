@@ -16,13 +16,13 @@ type Client struct {
 }
 //----------------------------------------------------------------------------------
 func (c *Client) SetClientConfig(baseURL, apiKey string) {
-	BaseURL = baseURL
-	APIKey = apiKey
+	c.BaseURL = baseURL
+	c.APIKey = apiKey
 }
 //----------------------------------------------------------------------------------
 func (c *Client) GetUsers() Users {
-	req, _ := http.NewRequest("GET", BaseURL + "/getUsers", nil)
-	req.Header.Add( "X-API-Key", APIKey)
+	req, _ := http.NewRequest("GET", c.BaseURL + "/getUsers", nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
 
 	res, _ := http.DefaultClient.Do(req)
 	defer res.Body.Close()
@@ -37,8 +37,8 @@ func (c *Client) GetUsers() Users {
 //----------------------------------------------------------------------------------
 func (c *Client) GetUser(UID string) User {
 	endpoint := fmt.Sprintf("/getUser?userUID=%s", UID)
-	req, _ := http.NewRequest("GET", BaseURL + endpoint, nil)
-	req.Header.Add( "X-API-Key", APIKey)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
 
 	res, err := http.DefaultClient.Do(req)
 	fmt.Println(err)
@@ -61,11 +61,11 @@ func (c *Client) CreateUser(newUser User) {
 	data.Set("login", newUser.Email)
 	data.Set("notify", "true")
 
-	req, reqerr := http.NewRequest("POST", BaseURL + "/addUser", strings.NewReader(data.Encode()))
+	req, reqerr := http.NewRequest("POST", c.BaseURL + "/addUser", strings.NewReader(data.Encode()))
 	if reqerr != nil {
 		fmt.Println(reqerr)
 	}
-	req.Header.Add( "X-API-Key", APIKey)
+	req.Header.Add( "X-API-Key", c.APIKey)
 	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded")
 
 	res, reserr := http.DefaultClient.Do(req)
@@ -79,8 +79,8 @@ func (c *Client) CreateUser(newUser User) {
 }
 //----------------------------------------------------------------------------------
 func (c *Client) GetTemplates() Templates {
-	req, _ := http.NewRequest("GET", BaseURL + "/getTemplates", nil)
-	req.Header.Add( "X-API-Key", APIKey)
+	req, _ := http.NewRequest("GET", c.BaseURL + "/getTemplates", nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
 
 	res, _ := http.DefaultClient.Do(req)
 	defer res.Body.Close()
@@ -98,8 +98,8 @@ func (c *Client) GetCourses() Courses {
 	var courses Courses	
 	for _, template := range templates.Templates {
 		endpoint := fmt.Sprintf("/getCourses/%s", template.Id)
-		req, _ := http.NewRequest("GET", BaseURL + endpoint, nil)
-		req.Header.Add( "X-API-Key", APIKey)
+		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+		req.Header.Add( "X-API-Key", c.APIKey)
 
 		res, _ := http.DefaultClient.Do(req)
 		defer res.Body.Close()
@@ -126,8 +126,8 @@ func (c *Client) GetSubscriptions(learnerEmail string) Courses {
 	}
 	if learnerUID != "" {
 		endpoint := fmt.Sprintf("/getSubscriptions?userUID=%s",learnerUID)
-		req, _ := http.NewRequest("GET", BaseURL + endpoint, nil)
-		req.Header.Add( "X-API-Key", APIKey)
+		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+		req.Header.Add( "X-API-Key", c.APIKey)
 
 		res, _ := http.DefaultClient.Do(req)
 		defer res.Body.Close()
