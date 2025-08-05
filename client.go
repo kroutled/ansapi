@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 )
-
 //----------------------------------------------------------------------------------
 type Client struct {
 	BaseURL string
