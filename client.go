@@ -15,16 +15,29 @@ type Client struct {
 }
 
 //----------------------------------------------------------------------------------
-func NewClient(baseURL, apiKey string) *Client {
+func NewClient(baseURL, apiKey string) (*Client, error) {
+	if baseURL == "" {
+		return nil, fmt.Errorf("baseURL cannot be empty")
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("apiKey cannot be empty")
+	}
 	return &Client{
 		BaseURL: baseURL,
 		APIKey: apiKey,
-	}
+	}, nil
 }
 //----------------------------------------------------------------------------------
-func (c *Client) SetClientConfig(baseURL, apiKey string) {
+func (c *Client) SetClientConfig(baseURL, apiKey string) error {
+	if baseURL == "" {
+		return fmt.Errorf("baseURL cannot be empty")
+	}
+	if apiKey == "" {
+		return fmt.Errorf("apiKey cannot be empty")
+	}
 	c.BaseURL = baseURL
 	c.APIKey = apiKey
+	return nil
 }
 //----------------------------------------------------------------------------------
 func (c *Client) GetUsers() Users {
