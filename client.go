@@ -117,7 +117,7 @@ func (c *Client) GetCourses() Courses {
 	templates := c.GetTemplates()
 	var courses Courses	
 	for _, template := range templates.Templates {
-		endpoint := fmt.Sprintf("/getCourses/%s", template.Id)
+		endpoint := fmt.Sprintf("/getCourses/%s?includeWithoutId=true", template.Id)
 		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
 		req.Header.Add( "X-API-Key", c.APIKey)
 
