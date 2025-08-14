@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 //----------------------------------------------------------------------------------
 type Client struct {
@@ -116,22 +118,79 @@ func (c *Client) GetTemplates() Templates {
 func (c *Client) GetCourses() Courses {
 	templates := c.GetTemplates()
 	var courses Courses	
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	concurrency := 50
+	sem := make(chan struct{}, concurrency)
+
 	for _, template := range templates.Templates {
-		endpoint := fmt.Sprintf("/getCourses/%s?includeWithoutId=true", template.Id)
-		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
-		req.Header.Add( "X-API-Key", c.APIKey)
+		wg.Add(1)
+		sem <- struct{}{}
 
-		res, _ := http.DefaultClient.Do(req)
-		defer res.Body.Close()
+		go func(t Template) {
+			defer wg.Done()
+			defer func(){ <-sem}()
 
-		body, _ := io.ReadAll(res.Body)
-		var tempCourses Courses
-		json.Unmarshal([]byte(body), &tempCourses)
-		for _, retCourse := range tempCourses.Courses {
-			courses.Courses = append(courses.Courses, retCourse)
+			endpoint := fmt.Sprintf("/getCourses/%s?includeWithoutId=true", template.Id)
+			req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+			req.Header.Add( "X-API-Key", c.APIKey)
+
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				panic(err)
+			}
+			defer res.Body.Close()
+
+			body, _ := io.ReadAll(res.Body)
+			var tempCourses Courses
+			json.Unmarshal([]byte(body), &tempCourses)
+
+			mu.Lock()
+			courses.Courses = append(courses.Courses, tempCourses.Courses...)
+			mu.Unlock()
+		}(template)
+	}
+	
+	wg.Wait()
+	return courses
+}
+//----------------------------------------------------------------------------------
+func (c *Client)InitCourseExtID(crs *Course) {
+	endpoint := fmt.Sprintf("/initializeCourseId/%s/%s", crs.UID, crs.UID)
+	req, err := http.NewRequest("POST", c.BaseURL + endpoint, nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+	req.Header.Add( "X-API-Key", c.APIKey)
+	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded")
+
+	res, reserr := http.DefaultClient.Do(req)
+	fmt.Println(res.StatusCode)
+	if reserr != nil {
+		fmt.Println(reserr)
+		fmt.Println(res.StatusCode)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(body)
+}
+//----------------------------------------------------------------------------------
+func (c *Client) GenerateCourseExtIDs() {
+	rn := time.Now()
+	var courses = c.GetCourses()
+	
+	i := 0
+	for _, course := range(courses.Courses) {
+		if course.Id == "" {
+			fmt.Println("course with no extid: ", course.Name)
+			c.InitCourseExtID(&course)
+			i++
 		}
 	}
-	return courses
+	fmt.Println(i)
+	fmt.Println("Took: ", time.Since(rn))
 }
 //----------------------------------------------------------------------------------
 func (c *Client) GetSubscriptions(learnerEmail string) Courses {
