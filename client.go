@@ -15,7 +15,8 @@ type Client struct {
 	BaseURL string
 	APIKey  string
 }
-
+//----------------------------------------------------------------------------------
+//-------------------------------------CLIENT---------------------------------------
 //----------------------------------------------------------------------------------
 func NewClient(baseURL, apiKey string) (*Client, error) {
 	if baseURL == "" {
@@ -30,7 +31,7 @@ func NewClient(baseURL, apiKey string) (*Client, error) {
 	}, nil
 }
 //----------------------------------------------------------------------------------
-func (c *Client) SetClientConfig(baseURL, apiKey string) error {
+func (c Client) SetClientConfig(baseURL, apiKey string) error {
 	if baseURL == "" {
 		return fmt.Errorf("baseURL cannot be empty")
 	}
@@ -42,7 +43,9 @@ func (c *Client) SetClientConfig(baseURL, apiKey string) error {
 	return nil
 }
 //----------------------------------------------------------------------------------
-func (c *Client) GetUsers() Users {
+//-------------------------------------USERS----------------------------------------
+//----------------------------------------------------------------------------------
+func (c Client) GetUsers() Users {
 	req, _ := http.NewRequest("GET", c.BaseURL + "/getUsers", nil)
 	req.Header.Add( "X-API-Key", c.APIKey)
 
@@ -57,7 +60,37 @@ func (c *Client) GetUsers() Users {
 	return learners
 }
 //----------------------------------------------------------------------------------
-func (c *Client) GetUser(UID string) User {
+//func (c Client) UserExistsExtID(userExtID string) bool {
+//	endpoint := fmt.Sprintf("/userExists/%s", userExtID)
+//	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+//	req.Header.Add( "X-API-Key", c.APIKey)
+//
+//	res, err := http.DefaultClient.Do(req)
+//	fmt.Println(err)
+//	defer res.Body.Close()
+//
+//	body, _ := io.ReadAll(res.Body)
+//
+//	return false
+//}
+//----------------------------------------------------------------------------------
+//func (c Client) UserExistsUID(userUID string) bool {
+//	endpoint := fmt.Sprintf("/userExists?userUID=%s", userUID)
+//	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+//	req.Header.Add( "X-API-Key", c.APIKey)
+//
+//	res, err := http.DefaultClient.Do(req)
+//	if err != nil {
+//		fmt.Println(err)
+//	}
+//	defer res.Body.Close()
+//
+//	body, _ := io.ReadAll(res.Body)
+//	
+//	return false
+//}
+//----------------------------------------------------------------------------------
+func (c Client) GetUser(UID string) User {
 	endpoint := fmt.Sprintf("/getUser?userUID=%s", UID)
 	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
 	req.Header.Add( "X-API-Key", c.APIKey)
@@ -74,7 +107,7 @@ func (c *Client) GetUser(UID string) User {
 	return learner
 }
 //----------------------------------------------------------------------------------
-func (c *Client) CreateUser(newUser User) {
+func (c Client) CreateUser(newUser User) {
 	data := url.Values{}
 	data.Set("firstName", newUser.FirstName)
 	data.Set("lastName", newUser.LastName)
@@ -100,7 +133,35 @@ func (c *Client) CreateUser(newUser User) {
 	fmt.Println(body)
 }
 //----------------------------------------------------------------------------------
-func (c *Client) GetTemplates() Templates {
+func (c Client) UpdateUser(user User) {
+	data := url.Values{}
+	data.Set("firstName", user.FirstName)
+	data.Set("lastName", user.LastName)
+	data.Set("id", user.Id)
+	data.Set("email", user.Email)
+	data.Set("login", user.Email)
+
+	endpoint := fmt.Sprintf("/updateUser?UID=%s", user.UID)
+	req, reqerr := http.NewRequest("POST", c.BaseURL + endpoint, strings.NewReader(data.Encode()))
+	if reqerr != nil {
+		fmt.Println(reqerr)
+	}
+	req.Header.Add( "X-API-Key", c.APIKey)
+	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded")
+
+	res, reserr := http.DefaultClient.Do(req)
+	if reserr != nil {
+		fmt.Println(reserr)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(body)
+}
+//----------------------------------------------------------------------------------
+//-------------------------------------COURSES--------------------------------------
+//----------------------------------------------------------------------------------
+func (c Client) GetTemplates() []Template {
 	req, _ := http.NewRequest("GET", c.BaseURL + "/getTemplates", nil)
 	req.Header.Add( "X-API-Key", c.APIKey)
 
@@ -112,51 +173,111 @@ func (c *Client) GetTemplates() Templates {
 	var templates Templates
 	json.Unmarshal([]byte(body), &templates)
 
-	return templates
+	return templates.Templates
 }
 //----------------------------------------------------------------------------------
-func (c *Client) GetCourses() Courses {
-	templates := c.GetTemplates()
-	var courses Courses	
-	var mu sync.Mutex
-	var wg sync.WaitGroup
+func (c Client) GetTemplateCourses(tuid string, coursesresultsch chan<-Course) {
+	endpoint := fmt.Sprintf("/getCourses?templateUID=%s", tuid)
+	req,err := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
 
-	concurrency := 50
-	sem := make(chan struct{}, concurrency)
-
-	for _, template := range templates.Templates {
-		wg.Add(1)
-		sem <- struct{}{}
-
-		go func(t Template) {
-			defer wg.Done()
-			defer func(){ <-sem}()
-
-			endpoint := fmt.Sprintf("/getCourses/%s?includeWithoutId=true", template.Id)
-			req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
-			req.Header.Add( "X-API-Key", c.APIKey)
-
-			res, err := http.DefaultClient.Do(req)
-			if err != nil {
-				panic(err)
-			}
-			defer res.Body.Close()
-
-			body, _ := io.ReadAll(res.Body)
-			var tempCourses Courses
-			json.Unmarshal([]byte(body), &tempCourses)
-
-			mu.Lock()
-			courses.Courses = append(courses.Courses, tempCourses.Courses...)
-			mu.Unlock()
-		}(template)
+	if err != nil {
+		fmt.Println(err)
 	}
-	
-	wg.Wait()
-	return courses
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	var courses Courses 
+	json.Unmarshal(body, &courses)
+
+	for _, course := range courses.Courses {
+		coursesresultsch <- course
+	}
 }
 //----------------------------------------------------------------------------------
-func (c *Client)InitCourseExtID(crs *Course) {
+func (c Client) GetAllCourses() []Course {
+	templates := c.GetTemplates()
+	var wg = sync.WaitGroup{}
+
+	workers := 80
+	queuedjobsch := make(chan Template)
+	resultsch := make(chan Course, 2000)
+
+	for w:=0;w<workers;w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for template := range queuedjobsch {
+				c.GetTemplateCourses(template.UID, resultsch)
+			}
+		}() 
+	}
+
+	go func(){
+		for _, template := range templates {
+			queuedjobsch <- template
+		}
+		close(queuedjobsch)
+	}()
+
+	go func(){
+		wg.Wait()
+		close(resultsch)
+	}()
+
+	var courseResp []Course
+	for course := range resultsch {
+		courseResp = append(courseResp, course)
+	}
+
+	return courseResp
+}
+//----------------------------------------------------------------------------------
+func (c Client) GetCourseByUID(crsUID string) Course {
+	endpoint := fmt.Sprintf("/getCourse?UID=%s", crsUID)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	var course Course
+	json.Unmarshal([]byte(body), &course)
+	
+	return course
+}
+//----------------------------------------------------------------------------------
+func (c Client) GetCourseByExtID(crsExtID string) Course {
+	endpoint := fmt.Sprintf("/getCourse/%s", crsExtID)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	var course Course
+	json.Unmarshal([]byte(body), &course)
+	
+	return course
+}
+//----------------------------------------------------------------------------------
+func (c Client)InitCourseExtID(crs Course) {
 	endpoint := fmt.Sprintf("/initializeCourseId/%s/%s", crs.UID, crs.UID)
 	req, err := http.NewRequest("POST", c.BaseURL + endpoint, nil)
 	if err != nil {
@@ -177,22 +298,24 @@ func (c *Client)InitCourseExtID(crs *Course) {
 	fmt.Println(body)
 }
 //----------------------------------------------------------------------------------
-func (c *Client) GenerateCourseExtIDs() {
+func (c Client) GenerateCourseExtIDs() {
 	rn := time.Now()
-	var courses = c.GetCourses()
+	var courses = c.GetAllCourses()
 	
 	i := 0
-	for _, course := range(courses.Courses) {
+	for _, course := range(courses) {
 		if course.Id == "" {
 			fmt.Println("course with no extid: ", course.Name)
-			c.InitCourseExtID(&course)
+			c.InitCourseExtID(course)
 			i++
 		}
 	}
 	fmt.Println(i)
 	fmt.Println("Took: ", time.Since(rn))
 }
-//----------------------------------------------------------------------------------
+///----------------------------------------------------------------------------------
+//-------------------------------------SUBSCRIPTIONS---------------------------------
+//-----------------------------------------------------------------------------------
 func (c *Client) GetSubscriptions(learnerEmail string) Courses {
 	var courses Courses	
 	var learnerUID string
