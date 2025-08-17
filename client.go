@@ -60,35 +60,47 @@ func (c Client) GetUsers() Users {
 	return learners
 }
 //----------------------------------------------------------------------------------
-//func (c Client) UserExistsExtID(userExtID string) bool {
-//	endpoint := fmt.Sprintf("/userExists/%s", userExtID)
-//	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
-//	req.Header.Add( "X-API-Key", c.APIKey)
-//
-//	res, err := http.DefaultClient.Do(req)
-//	fmt.Println(err)
-//	defer res.Body.Close()
-//
-//	body, _ := io.ReadAll(res.Body)
-//
-//	return false
-//}
+func (c Client) UserExistsExtID(userExtID string) bool {
+	endpoint := fmt.Sprintf("/userExists/%s", userExtID)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
+
+	res, err := http.DefaultClient.Do(req)
+	fmt.Println(err)
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	var result BaseResponse
+	json.Unmarshal(body, &result)
+
+	if result.Result == true {
+		return true
+	}
+	return false
+}
 //----------------------------------------------------------------------------------
-//func (c Client) UserExistsUID(userUID string) bool {
-//	endpoint := fmt.Sprintf("/userExists?userUID=%s", userUID)
-//	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
-//	req.Header.Add( "X-API-Key", c.APIKey)
-//
-//	res, err := http.DefaultClient.Do(req)
-//	if err != nil {
-//		fmt.Println(err)
-//	}
-//	defer res.Body.Close()
-//
-//	body, _ := io.ReadAll(res.Body)
-//	
-//	return false
-//}
+func (c Client) UserExistsUID(userUID string) bool {
+	endpoint := fmt.Sprintf("/userExists?userUID=%s", userUID)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	
+	var result BaseResponse
+	json.Unmarshal(body, &result)
+
+	if result.Result == true {
+		return true
+	}
+	return false
+}
 //----------------------------------------------------------------------------------
 func (c Client) GetUser(UID string) User {
 	endpoint := fmt.Sprintf("/getUser?userUID=%s", UID)
@@ -254,7 +266,7 @@ func (c Client) GetCourseByUID(crsUID string) Course {
 
 	body, _ := io.ReadAll(res.Body)
 	var course Course
-	json.Unmarshal([]byte(body), &course)
+	json.Unmarshal(body, &course)
 	
 	return course
 }
@@ -272,7 +284,7 @@ func (c Client) GetCourseByExtID(crsExtID string) Course {
 
 	body, _ := io.ReadAll(res.Body)
 	var course Course
-	json.Unmarshal([]byte(body), &course)
+	json.Unmarshal(body, &course)
 	
 	return course
 }
@@ -316,7 +328,7 @@ func (c Client) GenerateCourseExtIDs() {
 ///----------------------------------------------------------------------------------
 //-------------------------------------SUBSCRIPTIONS---------------------------------
 //-----------------------------------------------------------------------------------
-func (c *Client) GetSubscriptions(learnerEmail string) Courses {
+func (c *Client) GetSubscriptionsByEmail(learnerEmail string) Courses {
 	var courses Courses	
 	var learnerUID string
 	learners := c.GetUsers()
@@ -341,4 +353,68 @@ func (c *Client) GetSubscriptions(learnerEmail string) Courses {
 		fmt.Println("No learner found")
 	}
 	return courses
+}
+//-----------------------------------------------------------------------------------
+func (c *Client) GetSubscriptions(learner User, resultsch chan <- Course) {
+	var courses Courses
+
+	if learner.UID != "" {
+		endpoint := fmt.Sprintf("/getSubscriptions?userUID=%s",learner.UID)
+		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+		req.Header.Add( "X-API-Key", c.APIKey)
+
+		res, _ := http.DefaultClient.Do(req)
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		json.Unmarshal(body, &courses)
+	}
+
+	for _, course := range courses.Courses {
+		fmt.Println(course)
+		resultsch <- course
+	}
+}
+//-----------------------------------------------------------------------------------
+func (c *Client) GetAllSubscriptions() []Course {
+	learners := c.GetUsers()
+	workers := 80
+	jobsch := make(chan User)
+	resultsch := make(chan Course, 2000)
+	wg := sync.WaitGroup{}
+
+	//Get workers ready
+	for w:=0; w<workers; w++ {
+		wg.Add(1)
+		go func(){
+			defer wg.Done()
+			for learnerjob := range jobsch {
+				c.GetSubscriptions(learnerjob, resultsch)
+			}
+		}()
+	}
+
+	//feed the jobs
+	go func(){
+		for _, learner := range learners.Users {
+			jobsch <- learner
+		}
+		close(jobsch)
+	}()
+	
+	//wait and listen for to all end
+	go func(){
+		wg.Wait()
+		close(resultsch)
+	}()
+
+	var allCourses []Course
+	for result := range resultsch {
+		allCourses = append(allCourses, result)
+	}
+	return allCourses
 }
