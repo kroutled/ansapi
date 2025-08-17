@@ -123,7 +123,7 @@ func (c Client) CreateUser(newUser User) {
 	data := url.Values{}
 	data.Set("firstName", newUser.FirstName)
 	data.Set("lastName", newUser.LastName)
-	data.Set("id", newUser.Id)
+	data.Set("id", newUser.ID)
 	data.Set("email", newUser.Email)
 	data.Set("login", newUser.Email)
 	data.Set("notify", "true")
@@ -149,7 +149,7 @@ func (c Client) UpdateUser(user User) {
 	data := url.Values{}
 	data.Set("firstName", user.FirstName)
 	data.Set("lastName", user.LastName)
-	data.Set("id", user.Id)
+	data.Set("id", user.ID)
 	data.Set("email", user.Email)
 	data.Set("login", user.Email)
 
@@ -316,7 +316,7 @@ func (c Client) GenerateCourseExtIDs() {
 	
 	i := 0
 	for _, course := range(courses) {
-		if course.Id == "" {
+		if course.ID == "" {
 			fmt.Println("course with no extid: ", course.Name)
 			c.InitCourseExtID(course)
 			i++
