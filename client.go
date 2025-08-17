@@ -102,7 +102,7 @@ func (c Client) UserExistsUID(userUID string) bool {
 	return false
 }
 //----------------------------------------------------------------------------------
-func (c Client) GetUser(UID string) User {
+func (c Client) GetUserByUID(UID string) User {
 	endpoint := fmt.Sprintf("/getUser?userUID=%s", UID)
 	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
 	req.Header.Add( "X-API-Key", c.APIKey)
@@ -299,7 +299,7 @@ func (c Client)InitCourseExtID(crs Course) {
 	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded")
 
 	res, reserr := http.DefaultClient.Do(req)
-	fmt.Println(res.StatusCode)
+	fmt.Printf("Course initialised: %d\n", res.StatusCode)
 	if reserr != nil {
 		fmt.Println(reserr)
 		fmt.Println(res.StatusCode)
@@ -311,19 +311,17 @@ func (c Client)InitCourseExtID(crs Course) {
 }
 //----------------------------------------------------------------------------------
 func (c Client) GenerateCourseExtIDs() {
-	rn := time.Now()
 	var courses = c.GetAllCourses()
 	
 	i := 0
 	for _, course := range(courses) {
 		if course.ID == "" {
-			fmt.Println("course with no extid: ", course.Name)
+			fmt.Println("Course with no ExtID: ", course.Name)
+			fmt.Println("Initialising ExtID... ")
 			c.InitCourseExtID(course)
 			i++
 		}
 	}
-	fmt.Println(i)
-	fmt.Println("Took: ", time.Since(rn))
 }
 ///----------------------------------------------------------------------------------
 //-------------------------------------SUBSCRIPTIONS---------------------------------
@@ -353,6 +351,28 @@ func (c *Client) GetSubscriptionsByEmail(learnerEmail string) Courses {
 		fmt.Println("No learner found")
 	}
 	return courses
+}
+//-----------------------------------------------------------------------------------
+func (c *Client) GetLeanrerSubscriptionResults(learnerUID string) []Subscription {
+	var subscriptionResults Subscriptions
+
+	if learner.UID != "" {
+		endpoint := fmt.Sprintf("/getResults?userUID=%s",learnerUID)
+		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+		req.Header.Add( "X-API-Key", c.APIKey)
+
+		res, _ := http.DefaultClient.Do(req)
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		json.Unmarshal(body, &subscriptionResults)
+	}
+
+	return subscriptionResults.Courses	
 }
 //-----------------------------------------------------------------------------------
 func (c *Client) GetSubscriptions(learner User, resultsch chan <- Subscription) {
