@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"time"
 )
 //----------------------------------------------------------------------------------
 type Client struct {
@@ -356,7 +355,7 @@ func (c *Client) GetSubscriptionsByEmail(learnerEmail string) Courses {
 func (c *Client) GetLeanrerSubscriptionResults(learnerUID string) []Subscription {
 	var subscriptionResults Subscriptions
 
-	if learner.UID != "" {
+	if learnerUID != "" {
 		endpoint := fmt.Sprintf("/getResults?userUID=%s",learnerUID)
 		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
 		req.Header.Add( "X-API-Key", c.APIKey)
