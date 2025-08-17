@@ -43,7 +43,7 @@ type Template struct {
 }
 
 type Subscriptions struct {
-	courses []Subscription
+	Courses []Subscription				`json:"courses"`
 }
 
 type Subscription struct {
@@ -67,6 +67,7 @@ type Subscription struct {
     Grade                     string    `json:"grade"`
     Passed                    bool      `json:"passed"`
     GradeDate                 string    `json:"gradeDate"`
+    Parts	                  []SubscriptionPart    `json:"parts"`
 }
 
 type SubscriptionPart struct {

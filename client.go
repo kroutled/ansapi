@@ -355,11 +355,11 @@ func (c *Client) GetSubscriptionsByEmail(learnerEmail string) Courses {
 	return courses
 }
 //-----------------------------------------------------------------------------------
-func (c *Client) GetSubscriptions(learner User, resultsch chan <- Course) {
-	var courses Courses
+func (c *Client) GetSubscriptions(learner User, resultsch chan <- Subscription) {
+	var subscriptionResults Subscriptions
 
 	if learner.UID != "" {
-		endpoint := fmt.Sprintf("/getSubscriptions?userUID=%s",learner.UID)
+		endpoint := fmt.Sprintf("/getResults?userUID=%s",learner.UID)
 		req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
 		req.Header.Add( "X-API-Key", c.APIKey)
 
@@ -371,20 +371,20 @@ func (c *Client) GetSubscriptions(learner User, resultsch chan <- Course) {
 			fmt.Println(err)
 		}
 
-		json.Unmarshal(body, &courses)
+		json.Unmarshal(body, &subscriptionResults)
 	}
 
-	for _, course := range courses.Courses {
-		fmt.Println(course)
-		resultsch <- course
+	for _, subres := range subscriptionResults.Courses {
+		fmt.Println(subres)
+		resultsch <- subres
 	}
 }
 //-----------------------------------------------------------------------------------
-func (c *Client) GetAllSubscriptions() []Course {
+func (c *Client) GetAllSubscriptions() []Subscription {
 	learners := c.GetUsers()
 	workers := 80
 	jobsch := make(chan User)
-	resultsch := make(chan Course, 2000)
+	resultsch := make(chan Subscription, 2000)
 	wg := sync.WaitGroup{}
 
 	//Get workers ready
@@ -412,9 +412,9 @@ func (c *Client) GetAllSubscriptions() []Course {
 		close(resultsch)
 	}()
 
-	var allCourses []Course
+	var allSubscriptionResults []Subscription
 	for result := range resultsch {
-		allCourses = append(allCourses, result)
+		allSubscriptionResults = append(allSubscriptionResults, result)
 	}
-	return allCourses
+	return allSubscriptionResults
 }
