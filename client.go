@@ -394,7 +394,6 @@ func (c *Client) GetSubscriptions(learner User, resultsch chan <- Subscription) 
 	}
 
 	for _, subres := range subscriptionResults.Courses {
-		fmt.Println(subres)
 		resultsch <- subres
 	}
 }
@@ -436,4 +435,102 @@ func (c *Client) GetAllSubscriptions() []Subscription {
 		allSubscriptionResults = append(allSubscriptionResults, result)
 	}
 	return allSubscriptionResults
+}
+//-----------------------------------------------------------------------------------
+func (c *Client) ExtendSupscription() {
+	subscriptions := c.GetAllSubscriptions()
+	var expiredSubscriptions []Subscription
+	//var nonCommencedSubs []Subscription
+	//var lesson3Subs []Subscription
+	//var otherSubs []Subscription
+
+	for _, sub := range subscriptions {
+		if sub.Expired == true && sub.Completed == false {
+			expiredSubscriptions = append(expiredSubscriptions, sub)
+		}
+	}
+
+    nonCommenced, stoppedAfter3, in4Or5 := GroupExpiredCourses(expiredSubscriptions)
+
+    fmt.Println("Non-commenced & expired:", len(nonCommenced))
+    fmt.Println("Stopped after lesson 3:", len(stoppedAfter3))
+    fmt.Println("In lesson 4 or 5:", len(in4Or5))
+
+	//for _, expiredSub := range expiredSubscriptions {
+		//for i, part := range expiredSub.Parts {
+			//if part.Name =="Introduction Video" && part.Completed == false {
+				//nonCommencedSubs = append(nonCommencedSubs, expiredSub)
+			//}
+
+			//if part.BlockName == "Lesson 3" && part.Name == "Lesson 3 Badge"  && part.Completed == true {
+				//if expiredSub.Parts[i+1].Completed == false {
+					//lesson3Subs = append(lesson3Subs, expiredSub)
+				//}
+			//}
+
+			//if part.BlockName == "Lesson 4" && part.Name == "The Power of Assets"  && part.Completed == false {
+				//if expiredSub.Parts[i-1].BlockName == "Lesson 3" && expiredSub.Parts[i-1].Name == "Lesson 3 Badge"  && expiredSub.Parts[i-1].Completed == true {
+					//otherSubs = append(otherSubs, expiredSub)
+				//}
+			//}
+			
+			//if part.BlockName == "Lesson 5" && part.Name == "The Plan"  && part.Completed == false {
+				//if expiredSub.Parts[i-1].BlockName == "Lesson 4" && expiredSub.Parts[i-1].Name == "Lesson 4 Badge"  && expiredSub.Parts[i-1].Completed == true {
+					//otherSubs = append(otherSubs, expiredSub)
+				//}
+			//}
+		//}
+	//}
+	//fmt.Printf("Non Commenced: %d\n", len(nonCommencedSubs))
+	//fmt.Printf("Up to Lesson 3: %d\n", len(lesson3Subs))
+	//fmt.Printf("Either in leasson 4 or 5: %d\n", len(otherSubs))
+
+	fmt.Println(len(expiredSubscriptions))
+}
+
+func GroupExpiredCourses(courses []Subscription) (nonCommenced, stoppedAfter3, in4Or5 []Subscription) {
+    for _, course := range courses {
+        if !course.Expired || course.Completed {
+            // skip fully completed courses
+            continue
+        }
+
+        lesson3Done := false
+        lesson4Or5Started := false
+        anyLessonStarted := false
+
+        for _, p := range course.Parts {
+            // Only consider actual lessons
+            if p.Type != "Lesson" && p.Type != "Scorm" && p.Type != "Assessment" {
+                continue
+            }
+
+            if p.Completed {
+                anyLessonStarted = true
+            }
+
+            switch p.BlockName {
+            case "Lesson 3":
+                if p.Completed {
+                    lesson3Done = true
+                }
+            case "Lesson 4", "Lesson 5":
+                if p.Completed {
+                    lesson4Or5Started = true
+                }
+            }
+        }
+
+        // Assign to group based on progress
+        switch {
+        case !anyLessonStarted:
+            nonCommenced = append(nonCommenced, course)
+        case lesson3Done && !lesson4Or5Started:
+            stoppedAfter3 = append(stoppedAfter3, course)
+        case lesson3Done && lesson4Or5Started:
+            in4Or5 = append(in4Or5, course)
+        }
+    }
+
+    return
 }
