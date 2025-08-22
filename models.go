@@ -12,9 +12,12 @@ type User struct {
 	ID			string		`json:"id"`
 	UID			string		`json:"uid"`
 	FirstName	string 		`json:"firstName"`
+	Name	    string 		`json:"name"`
 	LastName	string 		`json:"lastName"`
 	Login		string 		`json:"login"`
 	Email		string 		`json:"email"`
+	CellNumber	string 		`json:"cellPhoneNumber"`
+    TelephoneNumber string  `json:"telephoneNumber"`
 } 
 
 type Courses struct {
@@ -47,6 +50,12 @@ type Subscriptions struct {
 }
 
 type Subscription struct {
+    LearnerUID                string
+    LearnerFirstName          string
+    LearnerLastName           string
+    LearnerEmail              string
+    LearnerCellNumber         string
+    Inidcator                 string
     ID                        string    `json:"id"`
     UID                       string    `json:"uid"`
     Name                      string    `json:"name"`

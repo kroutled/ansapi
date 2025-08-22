@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"strconv"
+	"github.com/xuri/excelize/v2"
+	"time"
 )
 //----------------------------------------------------------------------------------
 type Client struct {
@@ -58,6 +61,63 @@ func (c Client) GetUsers() Users {
 
 	return learners
 }
+
+func (c Client) GetUserByUIDResult(UID string, resultch chan<-User) {
+	endpoint := fmt.Sprintf("/getUser?userUID=%s", UID)
+	req, _ := http.NewRequest("GET", c.BaseURL + endpoint, nil)
+	req.Header.Add( "X-API-Key", c.APIKey)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	var learner User
+	json.Unmarshal([]byte(body), &learner)
+
+	resultch <- learner
+}
+
+func (c Client) GetAllUsers() []User {
+	users := c.GetUsers()
+	var wg = sync.WaitGroup{}
+
+	workers := 80
+	queuedjobsch := make(chan User)
+	resultsch := make(chan User, 2000)
+
+	for w:=0;w<workers;w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for learner := range queuedjobsch {
+				c.GetUserByUIDResult(learner.UID, resultsch)
+			}
+		}() 
+	}
+
+	go func(){
+		for _, learner := range users.Users {
+			queuedjobsch <- learner
+		}
+		close(queuedjobsch)
+	}()
+
+	go func(){
+		wg.Wait()
+		close(resultsch)
+	}()
+
+	var learnerResp []User
+	for learnerRslt := range resultsch {
+		learnerResp = append(learnerResp, learnerRslt)
+	}
+
+	return learnerResp
+}
 //----------------------------------------------------------------------------------
 func (c Client) UserExistsExtID(userExtID string) bool {
 	endpoint := fmt.Sprintf("/userExists/%s", userExtID)
@@ -65,7 +125,9 @@ func (c Client) UserExistsExtID(userExtID string) bool {
 	req.Header.Add( "X-API-Key", c.APIKey)
 
 	res, err := http.DefaultClient.Do(req)
-	fmt.Println(err)
+	if err != nil {
+		fmt.Println(err)
+	}
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
@@ -107,7 +169,9 @@ func (c Client) GetUserByUID(UID string) User {
 	req.Header.Add( "X-API-Key", c.APIKey)
 
 	res, err := http.DefaultClient.Do(req)
-	fmt.Println(err)
+	if err != nil {
+		fmt.Println(err)
+	}
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
@@ -394,12 +458,17 @@ func (c *Client) GetSubscriptions(learner User, resultsch chan <- Subscription) 
 	}
 
 	for _, subres := range subscriptionResults.Courses {
+		subres.LearnerUID = learner.UID
+		subres.LearnerFirstName = learner.FirstName
+		subres.LearnerLastName = learner.LastName
+		subres.LearnerEmail = learner.Email
+		subres.LearnerCellNumber = learner.TelephoneNumber
 		resultsch <- subres
 	}
 }
 //-----------------------------------------------------------------------------------
 func (c *Client) GetAllSubscriptions() []Subscription {
-	learners := c.GetUsers()
+	learners := c.GetAllUsers()
 	workers := 80
 	jobsch := make(chan User)
 	resultsch := make(chan Subscription, 2000)
@@ -418,7 +487,7 @@ func (c *Client) GetAllSubscriptions() []Subscription {
 
 	//feed the jobs
 	go func(){
-		for _, learner := range learners.Users {
+		for _, learner := range learners {
 			jobsch <- learner
 		}
 		close(jobsch)
@@ -440,97 +509,162 @@ func (c *Client) GetAllSubscriptions() []Subscription {
 func (c *Client) ExtendSupscription() {
 	subscriptions := c.GetAllSubscriptions()
 	var expiredSubscriptions []Subscription
-	//var nonCommencedSubs []Subscription
-	//var lesson3Subs []Subscription
-	//var otherSubs []Subscription
 
+	var nonCommencedSubscriptions []Subscription
+	var introSubscriptions []Subscription
+	var l1Subscriptions []Subscription
+	var l2Subscriptions []Subscription
+	var l3Subscriptions []Subscription
+	var l4Subscriptions []Subscription
+	var l5Subscriptions []Subscription
 	for _, sub := range subscriptions {
-		if sub.Expired == true && sub.Completed == false {
+		if sub.Expired && !sub.Completed {
 			expiredSubscriptions = append(expiredSubscriptions, sub)
 		}
 	}
 
-    nonCommenced, stoppedAfter3, in4Or5 := GroupExpiredCourses(expiredSubscriptions)
+	nonCommenced := 0
+	inIntro := 0
+	Lesson1 := 0
+	Lesson2 := 0
+	Lesson3 := 0
+	Lesson4 := 0
+	Lesson5 := 0
+	Conclude := 0
 
-    fmt.Println("Non-commenced & expired:", len(nonCommenced))
-    fmt.Println("Stopped after lesson 3:", len(stoppedAfter3))
-    fmt.Println("In lesson 4 or 5:", len(in4Or5))
+	for _, expSub := range expiredSubscriptions {
+		progparts := strings.Split(expSub.Progress, "/") 
+		ActivtyNo := progparts[0]
 
-	//for _, expiredSub := range expiredSubscriptions {
-		//for i, part := range expiredSub.Parts {
-			//if part.Name =="Introduction Video" && part.Completed == false {
-				//nonCommencedSubs = append(nonCommencedSubs, expiredSub)
-			//}
+		// Convert to int
+		num, err := strconv.Atoi(ActivtyNo)
+		if err != nil {
+			panic(err)
+		}
 
-			//if part.BlockName == "Lesson 3" && part.Name == "Lesson 3 Badge"  && part.Completed == true {
-				//if expiredSub.Parts[i+1].Completed == false {
-					//lesson3Subs = append(lesson3Subs, expiredSub)
-				//}
-			//}
+		// Use switch (case statement)
+		switch {
+			case num == 0:
+				nonCommencedSubscriptions = append(nonCommencedSubscriptions, expSub)
+				nonCommenced++
+			case num > 0 && num <= 4:
+				introSubscriptions = append(introSubscriptions, expSub)
+				inIntro++
+			case num >= 5 && num <= 8:
+				l1Subscriptions = append(l1Subscriptions, expSub)
+				Lesson1++
+			case num >= 9 && num <= 12:
+				l2Subscriptions = append(l2Subscriptions, expSub)
+				Lesson2++
+			case num >= 13 && num <= 16:
+				l3Subscriptions = append(l3Subscriptions, expSub)
+				Lesson3++
+			case num >= 17 && num <= 20:
+				l4Subscriptions = append(l4Subscriptions, expSub)
+				Lesson4++
+			case num >= 21 && num <= 24:
+				l5Subscriptions = append(l5Subscriptions, expSub)
+				Lesson5++
+			case num >= 25:
+				Conclude++
+			default:
+				fmt.Println("Other lesson:", num)
+		}
+	}
 
-			//if part.BlockName == "Lesson 4" && part.Name == "The Power of Assets"  && part.Completed == false {
-				//if expiredSub.Parts[i-1].BlockName == "Lesson 3" && expiredSub.Parts[i-1].Name == "Lesson 3 Badge"  && expiredSub.Parts[i-1].Completed == true {
-					//otherSubs = append(otherSubs, expiredSub)
-				//}
-			//}
-			
-			//if part.BlockName == "Lesson 5" && part.Name == "The Plan"  && part.Completed == false {
-				//if expiredSub.Parts[i-1].BlockName == "Lesson 4" && expiredSub.Parts[i-1].Name == "Lesson 4 Badge"  && expiredSub.Parts[i-1].Completed == true {
-					//otherSubs = append(otherSubs, expiredSub)
-				//}
-			//}
-		//}
-	//}
-	//fmt.Printf("Non Commenced: %d\n", len(nonCommencedSubs))
-	//fmt.Printf("Up to Lesson 3: %d\n", len(lesson3Subs))
-	//fmt.Printf("Either in leasson 4 or 5: %d\n", len(otherSubs))
-
+	Excelize(l5Subscriptions)
+	for _, l5sub := range l5Subscriptions {
+		fmt.Printf("CourseExtId: %s, learnerUID: %s, leanerName: %s, learnerSurname: %s, Email: %s, Cell: %s \n", l5sub.ID, l5sub.LearnerUID, l5sub.LearnerFirstName, l5sub.LearnerLastName, l5sub.LearnerEmail, l5sub.LearnerCellNumber)
+	}
+	fmt.Printf("Non Commenced: %d\n", nonCommenced)
+	fmt.Printf("Intro: %d\n", inIntro)
+	fmt.Printf("1: %d\n", Lesson1)
+	fmt.Printf("2: %d\n", Lesson2)
+	fmt.Printf("3: %d\n", Lesson3)
+	fmt.Printf("4: %d\n", Lesson4)
+	fmt.Printf("5: %d\n", Lesson5)
+	fmt.Printf("Conclu: %d\n", Conclude)
 	fmt.Println(len(expiredSubscriptions))
 }
 
-func GroupExpiredCourses(courses []Subscription) (nonCommenced, stoppedAfter3, in4Or5 []Subscription) {
-    for _, course := range courses {
-        if !course.Expired || course.Completed {
-            // skip fully completed courses
-            continue
+func Excelize(subs []Subscription) {
+    f := excelize.NewFile()
+    defer func() {
+        if err := f.Close(); err != nil {
+            fmt.Println(err)
         }
+    }()
 
-        lesson3Done := false
-        lesson4Or5Started := false
-        anyLessonStarted := false
-
-        for _, p := range course.Parts {
-            // Only consider actual lessons
-            if p.Type != "Lesson" && p.Type != "Scorm" && p.Type != "Assessment" {
-                continue
-            }
-
-            if p.Completed {
-                anyLessonStarted = true
-            }
-
-            switch p.BlockName {
-            case "Lesson 3":
-                if p.Completed {
-                    lesson3Done = true
-                }
-            case "Lesson 4", "Lesson 5":
-                if p.Completed {
-                    lesson4Or5Started = true
-                }
-            }
-        }
-
-        // Assign to group based on progress
-        switch {
-        case !anyLessonStarted:
-            nonCommenced = append(nonCommenced, course)
-        case lesson3Done && !lesson4Or5Started:
-            stoppedAfter3 = append(stoppedAfter3, course)
-        case lesson3Done && lesson4Or5Started:
-            in4Or5 = append(in4Or5, course)
-        }
+    sheetName := "Subscriptions"
+    index, err := f.NewSheet(sheetName)
+    if err != nil {
+        fmt.Println(err)
+        return
     }
 
-    return
+    // Headers
+    headers := []string{"ContactId", "firstName", "lastName", "cellPhoneNumber", "CourseExpiry", "Reengagement_indicator"}
+    for col, h := range headers {
+        cell, _ := excelize.CoordinatesToCellName(col+1, 1) // row 1
+        f.SetCellValue(sheetName, cell, h)
+    }
+
+    // Write rows
+    for i, sub := range subs {
+        row := i + 2 // start at row 2
+        f.SetCellValue(sheetName, "A"+strconv.Itoa(row), sub.LearnerUID)
+        f.SetCellValue(sheetName, "B"+strconv.Itoa(row), sub.LearnerFirstName)
+        f.SetCellValue(sheetName, "C"+strconv.Itoa(row), sub.LearnerLastName)
+        f.SetCellValue(sheetName, "D"+strconv.Itoa(row), sub.LearnerCellNumber)
+        f.SetCellValue(sheetName, "E"+strconv.Itoa(row), sub.StartDate)
+        f.SetCellValue(sheetName, "F"+strconv.Itoa(row), "C")
+    }
+
+    f.SetActiveSheet(index)
+
+    if err := f.SaveAs("subscriptions.xlsx"); err != nil {
+        fmt.Println(err)
+    }
+}
+
+func (c Client) UpdateSubscriptionExpDate(s Subscription, newExpDate time.Time) {
+	data := url.Values{}
+	data.Set("expireDate", newExpDate.Format("2006-01-02"))
+	data.Set("expired", "false")
+
+	endpoint := fmt.Sprintf("/updateSubscription?userUID=%s&courseUID=%s", s.LearnerUID, s.UID)
+	req, reqerr := http.NewRequest("POST", c.BaseURL + endpoint, strings.NewReader(data.Encode()))
+	if reqerr != nil {
+		fmt.Println(reqerr)
+	}
+	req.Header.Add( "X-API-Key", c.APIKey)
+	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded")
+
+	res, reserr := http.DefaultClient.Do(req)
+	fmt.Println(res.StatusCode)
+	if reserr != nil {
+		fmt.Println(reserr)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(body)
+}
+
+func (c Client) ExtendUserSubscription() {
+	subscriptions := c.GetAllSubscriptions()
+	var expiredSubscriptions []Subscription
+
+	for _, sub := range subscriptions {
+		if sub.Expired && !sub.Completed {
+			expiredSubscriptions = append(expiredSubscriptions, sub)
+		}
+	}
+	
+	fmt.Println(len(expiredSubscriptions))
+	//for _, subtoupdate := range expiredSubscriptions {
+		//newDate := time.Now().AddDate(0, 0, 30)
+		//c.UpdateSubscriptionExpDate(subtoupdate, newDate)
+		//fmt.Printf("Update subscription for: %s on Course: %s\n", subtoupdate.LearnerEmail, subtoupdate.UID)
+	//}
 }
